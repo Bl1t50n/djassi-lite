@@ -14,11 +14,12 @@ import { playCommandSound, soundCommand } from "./sounds.mjs";
 import { checkStageFiles, checkStagedContent, stagedNames } from "./secrets.mjs";
 import { availableTasks, planTask } from "./tasks.mjs";
 import { isNewer, latestVersion } from "./update.mjs";
+import { killCommand, portsReport, ramReport } from "./system.mjs";
 
 const pkg = JSON.parse(
   readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "package.json"), "utf8")
 );
-const VALUE_FLAGS = ["--project", "--stack"];
+const VALUE_FLAGS = ["--project", "--stack", "--port"];
 const SWITCHES = {
   "--dry-run": "dry-run",
   "--no-sound": "no-sound",
@@ -39,6 +40,12 @@ Projeto
   dev [--all]                Arranca o projeto (--all: todas as pastas, em paralelo)
   run [tarefa] [-- extra]    Corre uma tarefa (test, build, lint...). Sem tarefa: start ou dev
   update                     Diz se há versão nova (nunca se instala sozinho)
+
+Sistema (Windows)
+  ports                      Portas em escuta e o processo de cada uma
+  ram                        Processos que mais memória usam, e se são do Windows ou de apps
+  kill <pid> [--force]       Para um processo (pede confirmação; --yes salta)
+  kill --port <n>            Para o processo que está na porta n
 
 Git (com proteções)
   status | log | diff        Vê o estado do repositório
@@ -258,6 +265,18 @@ function dispatch(argv) {
   if (command === "inspect") return inspect(ctx);
   if (command === "doctor") return doctorCommand(ctx);
   if (command === "update") return updateCommand();
+  if (command === "ports") return say(...portsReport());
+  if (command === "ram") return say(...ramReport());
+  if (command === "kill") {
+    // --yes e --force só valem para kill: noutros comandos (ex.: push --force) ficam para o git recusar.
+    const pid = args.find((arg) => !arg.startsWith("--"));
+    return killCommand({
+      pid,
+      port: flags.port,
+      yes: args.includes("--yes"),
+      force: args.includes("--force")
+    });
+  }
   if (command === "dev") {
     const { head, extra } = splitExtra(args);
     if (head.length)
