@@ -8,18 +8,23 @@ import { planTask } from "./tasks.mjs";
 
 const COLORS = [36, 35, 33, 32, 34, 91, 96];
 
-// Projetos nas pastas diretas (ex.: backend/ e frontend/). Ignora ocultas e node_modules.
+// Pastas diretas (ex.: backend/ e frontend/). Ignora ocultas e node_modules sem as mencionar.
+// Devolve os projetos reconhecidos e as pastas que ficaram de fora, com o motivo.
 export function projectsIn(root) {
-  return readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && !entry.name.startsWith(".") && entry.name !== "node_modules")
-    .flatMap((entry) => {
-      const dir = join(root, entry.name);
-      try {
-        return [findProject(dir, { explicit: dir })];
-      } catch {
-        return [];
-      }
-    });
+  const projects = [];
+  const skipped = [];
+  const entries = readdirSync(root, { withFileTypes: true }).filter(
+    (entry) => entry.isDirectory() && !entry.name.startsWith(".") && entry.name !== "node_modules"
+  );
+  for (const entry of entries) {
+    const dir = join(root, entry.name);
+    try {
+      projects.push(findProject(dir, { explicit: dir }));
+    } catch {
+      skipped.push({ name: entry.name, reason: "sem projeto reconhecido" });
+    }
+  }
+  return { projects, skipped };
 }
 
 function runJob({ project, plan }, index, color) {
@@ -56,13 +61,18 @@ function runJob({ project, plan }, index, color) {
 
 // Corre a tarefa em todos os projetos das pastas diretas, em paralelo.
 export async function runAll(root, action, extra, { dryRun = false, color = Boolean(process.stdout.isTTY) } = {}) {
-  const jobs = projectsIn(root)
-    .map((project) => ({ project, plan: planTask(project, action, { extra }) }))
-    .filter((job) => job.plan);
+  const { projects, skipped } = projectsIn(root);
+  const jobs = [];
+  for (const project of projects) {
+    const plan = planTask(project, action, { extra });
+    if (plan) jobs.push({ project, plan });
+    else skipped.push({ name: basename(project.root), reason: `sem tarefa '${action}'` });
+  }
+  for (const { name, reason } of skipped) console.log(`⊘ ${name}: ${reason} (fica de fora)`);
   if (!jobs.length)
     throw new CliError(
-      `Não encontrei projetos com '${action}' nas pastas de '${root}'.`,
-      "Vê o que existe com: djassi inspect --project <pasta>"
+      `Nenhuma pasta tem '${action}' pronto. Nada foi arrancado.`,
+      "Vê o motivo acima. Para ver um projeto: djassi inspect --project <pasta>"
     );
   for (const { plan } of jobs) checkArgs(plan.tool, plan.args);
   for (const { project, plan } of jobs)

@@ -79,3 +79,17 @@ test("dev --all runs every project folder with a name prefix", () => {
   assert.match(result.stdout, /\[api\] pronto/);
   assert.match(result.stdout, /\[web\] pronto/);
 });
+
+test("dev --all says which folders are left out and why", () => {
+  const root = tempDir("djassi-skip-");
+  mkdirSync(join(root, "api"));
+  writeFileSync(join(root, "api", "package.json"), JSON.stringify({ name: "api", private: true, scripts: { dev: "echo pronto" } }));
+  mkdirSync(join(root, "docs"));
+  mkdirSync(join(root, "semdev"));
+  writeFileSync(join(root, "semdev", "package.json"), JSON.stringify({ name: "semdev", private: true, scripts: {} }));
+  const result = djassi(["dev", "--all"], { cwd: root });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /⊘ docs: sem projeto reconhecido/);
+  assert.match(result.stdout, /⊘ semdev: sem tarefa .dev./);
+  assert.match(result.stdout, /\[api\] pronto/);
+});
