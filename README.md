@@ -21,6 +21,8 @@ djassi doctor
 | `djassi inspect` | Mostra o tipo de projeto e as tarefas disponíveis |
 | `djassi run test` | Corre uma tarefa (`test`, `build`, `lint`...) |
 | `djassi dev` | Arranca o projeto |
+| `djassi` | Diz onde estás e o que podes fazer a seguir |
+| `djassi explain "erro"` | Explica um erro e diz o que fazer |
 | `djassi status` / `log` / `diff` | Vê o estado do repositório |
 | `djassi stage README.md` | Prepara um ficheiro para o commit |
 | `djassi commit -m "mensagem"` | Cria um commit |
@@ -28,6 +30,28 @@ djassi doctor
 | `djassi branch feat/nova-pagina` | Cria um ramo e muda para ele |
 
 Qualquer comando com `--dry-run` mostra o comando real e não faz nada.
+
+## Quando algo corre mal
+
+Se um comando corrido pelo `djassi` falha, o erro original aparece como sempre e, por baixo, a explicação:
+
+```
+Error: listen EADDRINUSE: address already in use :::3000
+ℹ Porta 3000 ocupada
+  Outro programa já está a usar esta porta. Muitas vezes é o teu próprio servidor, ainda aberto noutro terminal.
+  → djassi kill --port 3000
+```
+
+Reconhece cerca de 30 erros comuns: portas ocupadas, programas que faltam, dependências por instalar, erros de git (push recusado, conflitos, login no GitHub), PowerShell a bloquear o npm, e erros de escrita em JavaScript e Python. Não usa IA nem internet: é uma tabela em `src/explain.mjs`.
+
+Para erros de outros comandos:
+
+```bash
+djassi explain "fatal: The current branch feat/login has no upstream branch."
+npm run build 2>&1 | djassi explain
+```
+
+O `djassi doctor` também avisa se um `.env` ou uma chave na raiz do projeto não está no `.gitignore`, ou se já foi commitado.
 
 ## Segurança
 

@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { CliError } from "./errors.mjs";
 
 // Ferramentas que são ficheiros .cmd/.bat no Windows. O Node não as arranca sem shell,
@@ -24,17 +24,42 @@ export function commandText(tool, args) {
   return [tool, ...args].map((part) => (/\s/.test(part) ? JSON.stringify(part) : part)).join(" ");
 }
 
+// Corre a ferramenta com o ecrã normal, mas guarda o fim do stderr para explicar o erro se falhar.
+// stdin e stdout continuam ligados ao terminal (prompts e cores funcionam); só o stderr passa por nós.
+// Devolve { code, stderr, interrupted }. interrupted = o utilizador carregou em Ctrl+C.
 export function runTool(tool, args, { cwd } = {}) {
   if (usesShell(tool)) checkArgs(tool, args);
-  const result = spawnSync(tool, args, {
-    cwd,
-    shell: usesShell(tool),
-    stdio: "inherit",
-    windowsHide: true
+  // O stderr deixa de ser um terminal para o filho; FORCE_COLOR mantém as cores quando o ecrã as mostra.
+  const keepColor =
+    process.stdout.isTTY && process.stderr.isTTY && !("NO_COLOR" in process.env) && !("FORCE_COLOR" in process.env);
+  return new Promise((resolve, reject) => {
+    const child = spawn(tool, args, {
+      cwd,
+      shell: usesShell(tool),
+      stdio: ["inherit", "inherit", "pipe"],
+      windowsHide: true,
+      env: keepColor ? { ...process.env, FORCE_COLOR: "1" } : process.env
+    });
+    let tail = "";
+    let interrupted = false;
+    // Ctrl+C chega também ao filho: esperamos que ele termine em vez de sair primeiro.
+    const onInterrupt = () => {
+      interrupted = true;
+    };
+    process.on("SIGINT", onInterrupt);
+    child.stderr.on("data", (chunk) => {
+      process.stderr.write(chunk);
+      tail = (tail + chunk.toString("utf8")).slice(-64 * 1024);
+    });
+    child.on("error", () => {
+      process.off("SIGINT", onInterrupt);
+      reject(new CliError(`Não consegui iniciar '${tool}'.`, "Vê o que falta com: djassi doctor"));
+    });
+    child.on("close", (code, signal) => {
+      process.off("SIGINT", onInterrupt);
+      resolve({ code: code ?? 1, stderr: tail, interrupted: interrupted || Boolean(signal) });
+    });
   });
-  if (result.error)
-    throw new CliError(`Não consegui iniciar '${tool}'.`, "Vê o que falta com: djassi doctor");
-  return result.status ?? 1;
 }
 
 // Devolve a primeira linha da saída (ex.: a versão) ou null se a ferramenta não existe.

@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runAll } from "./all.mjs";
+import { projectsIn, runAll } from "./all.mjs";
+import { explain, explainFailure, renderExplanation } from "./explain.mjs";
 import { BRAND } from "./brand.mjs";
 import { loadTasks } from "./config.mjs";
 import { doctor } from "./doctor.mjs";
@@ -40,6 +41,7 @@ Projeto
   dev [--all]                Arranca o projeto (--all: todas as pastas, em paralelo)
   run [tarefa] [-- extra]    Corre uma tarefa (test, build, lint...). Sem tarefa: start ou dev
   update                     Diz se há versão nova (nunca se instala sozinho)
+  explain "mensagem"         Explica um erro (também: comando 2>&1 | djassi explain)
 
 Sistema (Windows)
   ports                      Portas em escuta e o processo de cada uma
@@ -127,7 +129,7 @@ function notify(ctx, command, code) {
   if (!ctx.silent) playCommandSound(command, code === 0 ? "success" : "error");
 }
 
-function runTask(ctx, action, extra) {
+async function runTask(ctx, action, extra) {
   const project = findProject(ctx.cwd, { explicit: ctx.flags.project });
   const stack = ctx.flags.stack;
   if (stack && !project.stacks.includes(stack))
@@ -147,12 +149,17 @@ function runTask(ctx, action, extra) {
     say(`(também encontrei: ${project.stacks.slice(1).map((s) => STACK_LABEL[s]).join(", ")}; usa --stack para escolher)`);
   say(`→ ${commandText(plan.tool, plan.args)}`);
   if (ctx.flags["dry-run"]) return dryRunDone();
-  const code = runTool(plan.tool, plan.args, { cwd: project.root });
-  notify(ctx, action, code);
+  return finish(ctx, action, await runTool(plan.tool, plan.args, { cwd: project.root }));
+}
+
+// Som e, se falhou (sem ser por Ctrl+C), explicação do erro.
+function finish(ctx, command, { code, stderr, interrupted }, { soundOnSuccessOnly = false } = {}) {
+  if (!soundOnSuccessOnly || code === 0) notify(ctx, command, code);
+  if (code !== 0 && !interrupted) explainFailure(stderr, code);
   return code;
 }
 
-function gitCommand(ctx, verb, args) {
+async function gitCommand(ctx, verb, args) {
   const gitArgs = gitPlan(verb, args);
   const cwd = ctx.flags.project ? resolve(ctx.flags.project) : ctx.cwd;
   if (!existsSync(cwd)) throw new CliError(`A pasta '${cwd}' não existe.`);
@@ -163,9 +170,10 @@ function gitCommand(ctx, verb, args) {
   }
   say(`→ ${commandText("git", gitArgs)}`);
   if (ctx.flags["dry-run"]) return dryRunDone();
-  const code = runTool("git", gitArgs, { cwd });
-  if (code === 0 && WRITE_VERBS.has(verb)) notify(ctx, verb, 0);
-  return code;
+  const result = await runTool("git", gitArgs, { cwd });
+  // Sons só nos comandos que mudam algo, e só quando correm bem (como antes).
+  if (!WRITE_VERBS.has(verb)) ctx = { ...ctx, silent: true };
+  return finish(ctx, verb, result, { soundOnSuccessOnly: true });
 }
 
 function inspect(ctx) {
@@ -201,6 +209,69 @@ function doctorCommand(ctx) {
   const failed = checks.filter((check) => !check.ok).length;
   say(failed ? `${failed} coisa(s) para resolver.` : "Tudo pronto.");
   return failed ? 1 : 0;
+}
+
+// djassi sem argumentos: onde estou e o que posso fazer agora. A ajuda completa fica em --help.
+function welcome(cwd) {
+  const c = BRAND.command;
+  const lines = [BRAND.banner, ""];
+  let project = null;
+  try {
+    project = findProject(cwd);
+  } catch {
+    // fora de um projeto
+  }
+  if (project) {
+    let custom = {};
+    try {
+      custom = loadTasks(project.root);
+    } catch {
+      // djassi.json inválido: o inspect mostra o erro; aqui só não sugere essas tarefas
+    }
+    const tasks = new Set([...availableTasks(project).map((t) => t.action), ...Object.keys(custom)]);
+    lines.push(`Estás em: ${project.root}`, `Tipo: ${project.stacks.map((s) => STACK_LABEL[s]).join(", ")}`, "", "Experimenta:");
+    if (tasks.has("dev") || tasks.has("run")) lines.push(`  ${c} dev          arranca o projeto`);
+    if (tasks.has("test")) lines.push(`  ${c} run test     corre os testes`);
+    if (existsSync(join(project.root, ".git"))) lines.push(`  ${c} status       vê o que mudou`);
+    lines.push(`  ${c} inspect      todas as tarefas deste projeto`);
+  } else {
+    const inside = projectsIn(cwd).projects.map((p) => p.root.split(/[\\/]/).pop());
+    if (inside.length) {
+      lines.push(`Aqui há ${inside.length > 1 ? "projetos" : "um projeto"} nas pastas: ${inside.join(", ")}`, "", "Experimenta:");
+      if (inside.length > 1) lines.push(`  ${c} dev --all    arranca todos ao mesmo tempo`);
+      lines.push(`  cd ${inside[0]}${" ".repeat(Math.max(1, 12 - inside[0].length))}entra num deles`);
+    } else {
+      lines.push("Não estás dentro de um projeto.", "", "Experimenta:");
+    }
+    lines.push(`  ${c} doctor       vê se tens tudo instalado`);
+  }
+  lines.push("", `Todos os comandos: ${c} --help`);
+  return say(...lines);
+}
+
+// Explica um erro colado como argumento, ou recebido por pipe (comando 2>&1 | djassi explain).
+function explainCommand(args) {
+  let text = args.join(" ");
+  if (!text && !process.stdin.isTTY) {
+    try {
+      text = readFileSync(0, "utf8");
+    } catch {
+      text = "";
+    }
+  }
+  if (!text.trim())
+    throw new CliError(
+      "Falta o erro a explicar.",
+      `Usa: ${BRAND.command} explain "mensagem de erro"   ou   comando 2>&1 | ${BRAND.command} explain`
+    );
+  const found = explain(text);
+  if (found) return say(...renderExplanation(found));
+  say(
+    "Não reconheço este erro.",
+    "  → procura a primeira linha com 'Error': costuma dizer o ficheiro e a linha",
+    "  → copia a mensagem exata (sem caminhos teus) para um motor de pesquisa"
+  );
+  return 1;
 }
 
 async function updateCommand() {
@@ -256,12 +327,14 @@ function dispatch(argv) {
   const { flags, rest } = parseArgv(argv);
   const [command, ...args] = rest;
   if (flags.version) return say(pkg.version);
-  if (flags.help || !command || command === "help") return say(HELP);
+  if (flags.help || command === "help") return say(HELP);
+  if (!command) return welcome(process.cwd());
   const ctx = {
     flags,
     cwd: process.cwd(),
     silent: Boolean(flags["no-sound"]) || process.env.DJASSI_NO_SOUND === "1"
   };
+  if (command === "explain") return explainCommand(args);
   if (command === "inspect") return inspect(ctx);
   if (command === "doctor") return doctorCommand(ctx);
   if (command === "update") return updateCommand();

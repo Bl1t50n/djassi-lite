@@ -1,4 +1,6 @@
+import { spawnSync } from "node:child_process";
 import { probe } from "./exec.mjs";
+import { secretFileProblem } from "./secrets.mjs";
 
 const HINT = {
   node: "Instala Node.js 22 ou mais recente: https://nodejs.org",
@@ -49,6 +51,34 @@ export function doctor(project) {
   for (const tool of project ? toolsFor(project) : []) {
     const version = probe(tool);
     checks.push({ name: tool, ok: Boolean(version), detail: version ?? "não encontrado", hint: HINT[tool] ?? "" });
+  }
+  if (project) checks.push(...secretChecks(project));
+  return checks;
+}
+
+// Ficheiros com segredos na raiz do projeto (.env, chaves): têm de estar no .gitignore e fora do git.
+// ponytail: só a raiz; os stage/commit do djassi apanham o resto.
+function secretChecks(project) {
+  const git = (...args) => spawnSync("git", args, { cwd: project.root, encoding: "utf8", windowsHide: true });
+  const checks = [];
+  for (const name of [...project.files].filter(secretFileProblem)) {
+    if (git("ls-files", "--error-unmatch", "--", name).status === 0) {
+      checks.push({
+        name,
+        ok: false,
+        detail: "já está no git (foi commitado)",
+        hint: `git rm --cached ${name}, acrescenta-o ao .gitignore e muda as passwords que lá estavam`
+      });
+      continue;
+    }
+    const ignored = git("check-ignore", "-q", "--", name).status;
+    if (ignored === 128) break; // não é um repositório git: nada a verificar
+    checks.push({
+      name,
+      ok: ignored === 0,
+      detail: ignored === 0 ? "protegido pelo .gitignore" : "não está no .gitignore",
+      hint: `acrescenta uma linha "${name}" ao .gitignore`
+    });
   }
   return checks;
 }

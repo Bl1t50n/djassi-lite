@@ -11,10 +11,11 @@ export function tempDir(prefix = "djassi-test-") {
 }
 
 // Sem som e sem perfil real: cada chamada usa a sua pasta de configuração.
-export function djassi(args, { cwd, env = {} } = {}) {
+export function djassi(args, { cwd, env = {}, input } = {}) {
   return spawnSync(process.execPath, [BIN, ...args], {
     cwd: cwd ?? tempDir(),
     encoding: "utf8",
+    input,
     timeout: 90000,
     env: { ...process.env, DJASSI_NO_SOUND: "1", DJASSI_CONFIG_DIR: tempDir("djassi-cfg-"), ...env }
   });
