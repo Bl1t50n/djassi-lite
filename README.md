@@ -90,6 +90,16 @@ npm test
 
 Os testes usam pastas temporárias e não tocam em áudio nem no teu perfil do PowerShell.
 
+O CI corre os testes em Windows, Linux e macOS, com Node 22 e 24, instala o pacote como um utilizador e procura segredos no histórico (gitleaks).
+
+### Lançar uma versão
+
+1. No `dev`: sobe a `version` no `package.json` e faz commit.
+2. Leva o `dev` para `qa/testing/staging` e depois para `main` (só fast-forward).
+3. No `main`: `git tag vX.Y.Z` e `git push origin vX.Y.Z`.
+
+A tag dispara o workflow de release: volta a correr o CI, confirma que a tag bate com o `package.json` e está no `main`, e cria o release no GitHub com o pacote. A partir daí, o `djassi update` avisa quem tem uma versão antiga.
+
 ## Licença
 
 MIT. Ver [LICENSE](LICENSE).

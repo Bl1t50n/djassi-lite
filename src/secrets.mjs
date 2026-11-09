@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { basename } from "node:path";
 import { CliError } from "./errors.mjs";
 
-// ponytail: padrões conhecidos, não é um scanner completo. Para o repo público, o gitleaks corre no CI.
+// Limite: padrões conhecidos, não é um scanner completo. Para o repo público, o gitleaks corre no CI.
 const SAMPLE = /\.(example|sample|template)$/;
 const SECRET_FILE = [/^\.env(\..+)?$/, /\.(pem|key|p12|pfx|jks|keystore)$/i, /^id_(rsa|dsa|ecdsa|ed25519)$/];
 const SECRET_TEXT = [

@@ -43,7 +43,7 @@ export function soundForCommand(command, event = "success") {
   return config.enabled && file ? { file: audioFile(file), volume: config.volume } : null;
 }
 
-// ponytail: leitores nativos cobrem os clips locais; outro backend só para uma plataforma
+// Limite: leitores nativos cobrem os clips locais; outro backend só para uma plataforma
 // que não consiga tocar o formato escolhido.
 export function playSound({ file, volume = 75, wait = false }) {
   const clip = audioFile(file);
@@ -87,7 +87,7 @@ export function playCommandSound(command, event = "success") {
     const sound = soundForCommand(command, event);
     if (sound) playSound(sound);
   } catch {
-    // ponytail: o som é melhor-esforço; um clip em falta nunca muda o resultado do comando.
+    // Limite: o som é melhor-esforço; um clip em falta nunca muda o resultado do comando.
   }
 }
 

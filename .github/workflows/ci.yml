@@ -4,28 +4,48 @@ on:
   push:
     branches: [main, qa/testing/staging, dev]
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
 
 jobs:
   test:
+    name: test (${{ matrix.os }}, Node ${{ matrix.node }})
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest]
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        node: [22, 24]
     runs-on: ${{ matrix.os }}
+    env:
+      DJASSI_SKIP_UPDATE: "1"
+      DJASSI_NO_SOUND: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-      - run: git config --global user.name "CI" && git config --global user.email "ci@example.com"
-      - run: npm test
-        env:
-          DJASSI_SKIP_UPDATE: "1"
+          node-version: ${{ matrix.node }}
+      - name: Git identity for the tests
+        run: |
+          git config --global user.name "CI"
+          git config --global user.email "ci@example.com"
+      - name: Tests
+        run: npm test
+      - name: Install the package like a user and try it
+        shell: bash
+        run: |
+          npm pack --silent
+          npm install -g ./djassi-lite-*.tgz
+          expected="$(node -p "require('./package.json').version")"
+          test "$(djassi --version)" = "$expected"
+          djassi --help > /dev/null
+          djassi explain "Error: listen EADDRINUSE: address already in use :::3000" | grep -q "Porta 3000"
+          cd "$RUNNER_TEMP" && djassi doctor
 
   secrets:
+    # Num release (tag), o histórico já foi verificado no push para main.
+    if: ${{ github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

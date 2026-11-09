@@ -1,7 +1,7 @@
 import { BRAND } from "./brand.mjs";
 
 // Erros comuns → o que aconteceu e o que fazer a seguir.
-// ponytail: tabela fixa, sem IA nem rede. Ordem = prioridade (o mais específico primeiro; o primeiro que bate ganha).
+// Limite: tabela fixa, sem IA nem rede. Ordem = prioridade (o mais específico primeiro; o primeiro que bate ganha).
 // Para acrescentar um erro: uma entrada nova aqui e um caso em test/explain.test.mjs.
 const cli = BRAND.command;
 const WIN = process.platform === "win32";

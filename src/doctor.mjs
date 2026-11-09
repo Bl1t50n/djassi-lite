@@ -57,7 +57,7 @@ export function doctor(project) {
 }
 
 // Ficheiros com segredos na raiz do projeto (.env, chaves): têm de estar no .gitignore e fora do git.
-// ponytail: só a raiz; os stage/commit do djassi apanham o resto.
+// Limite: só a raiz; os stage/commit do djassi apanham o resto.
 function secretChecks(project) {
   const git = (...args) => spawnSync("git", args, { cwd: project.root, encoding: "utf8", windowsHide: true });
   const checks = [];

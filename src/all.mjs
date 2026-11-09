@@ -4,7 +4,7 @@ import { basename, join } from "node:path";
 import { loadTasks } from "./config.mjs";
 import { CliError } from "./errors.mjs";
 import { findProject } from "./detect.mjs";
-import { checkArgs, commandText, usesShell } from "./exec.mjs";
+import { checkArgs, commandText, spawnArgs } from "./exec.mjs";
 import { planTask } from "./tasks.mjs";
 
 const COLORS = [36, 35, 33, 32, 34, 91, 96];
@@ -32,9 +32,10 @@ function runJob({ project, plan }, index, color) {
   const label = `[${basename(project.root)}] `;
   const prefix = color ? `\x1b[${COLORS[index % COLORS.length]}m${label}\x1b[0m` : label;
   return new Promise((done) => {
-    const child = spawn(plan.tool, plan.args, {
+    const [command, argv, shell] = spawnArgs(plan.tool, plan.args);
+    const child = spawn(command, argv, {
       cwd: project.root,
-      shell: usesShell(plan.tool),
+      shell,
       windowsHide: true,
       stdio: ["inherit", "pipe", "pipe"]
     });

@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
+import { spawnArgs } from "../src/exec.mjs";
 import { kindOf } from "../src/system.mjs";
 import { latestVersion } from "../src/update.mjs";
 import { djassi, tempDir } from "./support.mjs";
@@ -71,4 +72,15 @@ test("commit catches a .env inside a folder with accents (staged via the folder)
   const commit = djassi(["commit", "-m", "Teste"], { cwd: repo });
   assert.equal(commit.status, 1);
   assert.match(commit.stderr, /\.env/);
+});
+
+test("spawn: real programs get argv; on Windows npm skips cmd.exe and other shims get one checked line", () => {
+  assert.deepEqual(spawnArgs("git", ["commit", "-m", "Olá & adeus"]), ["git", ["commit", "-m", "Olá & adeus"], false]);
+  if (process.platform !== "win32") return;
+  const [command, argv, shell] = spawnArgs("npm", ["run", "dev"]);
+  assert.equal(command, process.execPath);
+  assert.match(argv[0], /npm-cli\.js$/);
+  assert.equal(shell, false);
+  assert.deepEqual(spawnArgs("pnpm", ["run", "dev"]), ["pnpm run dev", [], true]);
+  assert.throws(() => spawnArgs("pnpm", ["run", "a&calc"]));
 });

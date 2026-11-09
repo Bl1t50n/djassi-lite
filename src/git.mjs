@@ -25,7 +25,7 @@ function refName(value, what) {
 }
 
 // Devolve os argumentos do git. Sem shell: cada item chega ao git como um argumento só.
-// ponytail: sem force-push, sem apagar ramos remotos, sem reescrever histórico.
+// Limite: sem force-push, sem apagar ramos remotos, sem reescrever histórico.
 export function gitPlan(verb, args) {
   switch (verb) {
     case "status":

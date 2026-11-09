@@ -1,6 +1,6 @@
 {
   "name": "djassi-lite",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Mini CLI para estudantes: detetar projetos, correr tarefas, comandos Git com proteções e sons.",
   "license": "MIT",
   "type": "module",
