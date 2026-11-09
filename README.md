@@ -81,7 +81,34 @@ Depois corres `djassi run seed`. Aparece também em `djassi inspect`.
 
 ## Backend e frontend juntos
 
-`djassi dev --all` arranca todos os projetos das pastas diretas (ex.: `backend/` e `frontend/`) em paralelo, com o nome de cada um à frente das linhas. Usa `--dry-run` para ver os comandos.
+`djassi dev --all` arranca os projetos que estão nas pastas diretas da pasta atual, todos ao mesmo tempo. Cada linha de saída vem com o nome da pasta à frente, por exemplo `[backend] ...` ou `[frontend] ...`.
+
+Estrutura que funciona:
+
+```
+meu-projeto/
+  backend/     package.json com script "dev"   ← incluído
+  frontend/    package.json com script "dev"   ← incluído
+  docs/        sem projeto                     ← ignorado
+  .git/        oculta                          ← ignorada
+```
+
+Regras:
+
+- Só olha para as pastas diretas. Não procura em `backend/src/` nem mais fundo.
+- Pastas ocultas (`.nome`) e `node_modules` são ignoradas.
+- Uma pasta entra se tiver um projeto reconhecido (ver lista acima) **e** uma tarefa `dev` (ou `start:dev`, `serve`, `start` em Node).
+- Pastas sem tarefa `dev` ficam de fora sem aviso. Se nenhuma tiver, o comando termina com erro.
+- Só existe para `dev`. Para `test` ou `build`, corre `djassi run <tarefa>` dentro de cada pasta.
+- `--dry-run` mostra os comandos sem arrancar nada.
+
+Para ver o que vai ser incluído antes de arrancar:
+
+```bash
+djassi dev --all --dry-run
+```
+
+Se o `djassi` não encontrar um projeto, confirma o formato com `djassi inspect --project backend`.
 
 ## Atualizações
 
