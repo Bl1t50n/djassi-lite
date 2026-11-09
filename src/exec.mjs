@@ -8,7 +8,7 @@ import { CliError } from "./errors.mjs";
 const SHIMS = new Set(["npm", "pnpm", "yarn", "mvn", "gradle", "gradlew.bat"]);
 const SAFE_ARG = /^[A-Za-z0-9_.:=/@+-]+$/;
 
-const usesShell = (tool) => process.platform === "win32" && SHIMS.has(tool);
+export const usesShell = (tool) => process.platform === "win32" && SHIMS.has(tool);
 
 export function checkArgs(tool, args) {
   if (!SHIMS.has(tool)) return;

@@ -68,3 +68,35 @@ Os testes usam pastas temporárias e não tocam em áudio nem no teu perfil do P
 ## Licença
 
 MIT. Ver [LICENSE](LICENSE).
+
+## Tarefas próprias (`djassi.json`)
+
+Põe um `djassi.json` na raiz do projeto para adicionar tarefas. Cada tarefa é `[ferramenta, ...argumentos]`, sem shell:
+
+```json
+{ "tasks": { "seed": ["npm", "run", "db:seed"] } }
+```
+
+Depois corres `djassi run seed`. Aparece também em `djassi inspect`.
+
+## Backend e frontend juntos
+
+`djassi dev --all` arranca todos os projetos das pastas diretas (ex.: `backend/` e `frontend/`) em paralelo, com o nome de cada um à frente das linhas. Usa `--dry-run` para ver os comandos.
+
+## Atualizações
+
+`djassi update` diz se há versão nova. O CLI avisa no arranque, no máximo uma vez por dia. Nunca se instala sozinho: quem atualiza és tu. Desliga a verificação com `DJASSI_SKIP_UPDATE=1`.
+
+## Segredos
+
+`stage` recusa ficheiros como `.env`, `*.pem` e `id_rsa`. `commit` recusa tokens conhecidos (GitHub, AWS, Slack, Stripe) e chaves privadas no diff. Isto não substitui um scanner completo: usa também o `.gitignore` e um scanner no CI.
+
+## Criar a tua versão
+
+O CLI é open source (MIT). Para uma versão com o teu nome:
+
+1. Muda `BRAND` em `src/brand.mjs` (comando, marca, repositório e banner).
+2. Muda `name`, `bin` e `repository` no `package.json`.
+3. Publica o pacote com o novo nome.
+
+Os textos de erro ainda dizem `djassi`: uma pesquisa e substituição resolve.

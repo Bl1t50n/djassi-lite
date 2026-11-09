@@ -1,6 +1,9 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { runAll } from "./all.mjs";
+import { BRAND } from "./brand.mjs";
+import { loadTasks } from "./config.mjs";
 import { doctor } from "./doctor.mjs";
 import { STACK_LABEL, findProject } from "./detect.mjs";
 import { CliError } from "./errors.mjs";
@@ -8,8 +11,9 @@ import { checkArgs, commandText, runTool } from "./exec.mjs";
 import { GIT_VERBS, WRITE_VERBS, gitPlan } from "./git.mjs";
 import { installPowerShell } from "./powershell.mjs";
 import { playCommandSound, soundCommand } from "./sounds.mjs";
+import { checkStageFiles, checkStagedContent, stagedNames } from "./secrets.mjs";
 import { availableTasks, planTask } from "./tasks.mjs";
-import { existsSync } from "node:fs";
+import { isNewer, latestVersion } from "./update.mjs";
 
 const pkg = JSON.parse(
   readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "package.json"), "utf8")
@@ -18,27 +22,29 @@ const VALUE_FLAGS = ["--project", "--stack"];
 const SWITCHES = {
   "--dry-run": "dry-run",
   "--no-sound": "no-sound",
+  "--all": "all",
   "--help": "help",
   "-h": "help",
   "--version": "version",
   "-v": "version"
 };
 
-const HELP = `DJASSI CLI · djassi-lite · Cabral Djassi Studio
+const HELP = `${BRAND.banner}
 
-Uso: djassi <comando> [opções]
+Uso: ${BRAND.command} <comando> [opções]
 
 Projeto
   inspect                    Mostra o tipo de projeto e as tarefas disponíveis
   doctor                     Verifica se tens as ferramentas necessárias
-  dev                        Arranca o projeto
+  dev [--all]                Arranca o projeto (--all: todas as pastas, em paralelo)
   run [tarefa] [-- extra]    Corre uma tarefa (test, build, lint...). Sem tarefa: start ou dev
+  update                     Diz se há versão nova (nunca se instala sozinho)
 
 Git (com proteções)
   status | log | diff        Vê o estado do repositório
-  stage <ficheiros>          Prepara ficheiros para o próximo commit
+  stage <ficheiros>          Prepara ficheiros (recusa segredos como .env e chaves)
   unstage <ficheiros>        Tira ficheiros do próximo commit
-  commit -m "mensagem"       Cria um commit
+  commit -m "mensagem"       Cria um commit (recusa tokens no diff)
   push [-u] [remoto] [ramo]  Envia commits (nunca com --force)
   pull                       Traz alterações (só fast-forward)
   branch [nome]              Lista os ramos ou cria um e muda para ele
@@ -58,7 +64,10 @@ Opções
   --dry-run           Mostra o comando sem o executar
   --no-sound          Não toca som neste comando
   -h, --help          Mostra esta ajuda
-  -v, --version       Mostra a versão`;
+  -v, --version       Mostra a versão
+
+Tarefas próprias: põe um djassi.json na raiz do projeto com
+  { "tasks": { "seed": ["npm", "run", "db:seed"] } }`;
 
 const say = (...lines) => {
   for (const line of lines) console.log(line);
@@ -116,7 +125,10 @@ function runTask(ctx, action, extra) {
   const stack = ctx.flags.stack;
   if (stack && !project.stacks.includes(stack))
     throw new CliError(`Este projeto não tem '${stack}'.`, `Disponíveis: ${project.stacks.join(", ")}`);
-  const plan = planTask(project, action, { stack, extra });
+  const custom = loadTasks(project.root)[action];
+  const plan = custom
+    ? { tool: custom[0], args: [...custom.slice(1), ...extra] }
+    : planTask(project, action, { stack, extra });
   if (!plan)
     throw new CliError(
       `Não sei fazer '${action}' neste projeto.`,
@@ -137,6 +149,11 @@ function gitCommand(ctx, verb, args) {
   const gitArgs = gitPlan(verb, args);
   const cwd = ctx.flags.project ? resolve(ctx.flags.project) : ctx.cwd;
   if (!existsSync(cwd)) throw new CliError(`A pasta '${cwd}' não existe.`);
+  if (verb === "stage") checkStageFiles(args);
+  if (verb === "commit") {
+    checkStageFiles(stagedNames(cwd));
+    checkStagedContent(cwd);
+  }
   say(`→ ${commandText("git", gitArgs)}`);
   if (ctx.flags["dry-run"]) return dryRunDone();
   const code = runTool("git", gitArgs, { cwd });
@@ -146,6 +163,7 @@ function gitCommand(ctx, verb, args) {
 
 function inspect(ctx) {
   const project = findProject(ctx.cwd, { explicit: ctx.flags.project });
+  const custom = loadTasks(project.root);
   say(
     `Projeto: ${project.root}`,
     `Tipo: ${project.stacks.map((s) => STACK_LABEL[s]).join(", ")}`
@@ -153,8 +171,10 @@ function inspect(ctx) {
   if (project.stacks.includes("node")) say(`Gestor de pacotes: ${project.packageManager}`);
   const tasks = availableTasks(project);
   say("Tarefas:");
-  if (!tasks.length) say("  nenhuma reconhecida");
+  if (!tasks.length && !Object.keys(custom).length) say("  nenhuma reconhecida");
   for (const task of tasks) say(`  ${task.action.padEnd(6)} → ${commandText(task.tool, task.args)}`);
+  for (const [name, command] of Object.entries(custom))
+    say(`  ${name.padEnd(6)} → ${command.join(" ")} (djassi.json)`);
   return 0;
 }
 
@@ -176,12 +196,27 @@ function doctorCommand(ctx) {
   return failed ? 1 : 0;
 }
 
+async function updateCommand() {
+  const latest = await latestVersion({ force: true });
+  if (!latest) {
+    console.error(`✖ Não consegui verificar atualizações (versão atual: ${pkg.version}).`);
+    return 1;
+  }
+  if (!isNewer(latest, pkg.version)) return say(`Estás na última versão (${pkg.version}).`);
+  return say(
+    `Versão nova: ${latest} (tens ${pkg.version}).`,
+    "Atualiza com:",
+    `  npm install -g ${BRAND.installSpec}`,
+    "(o CLI não se atualiza sozinho: corres tu o comando)"
+  );
+}
+
 function sound(ctx, args) {
   const [operation = "list", ...rest] = args;
   const dryRun = Boolean(ctx.flags["dry-run"]);
   if (operation === "shell") {
     if (rest[0] !== "powershell")
-      throw new CliError("Só existe 'djassi sound shell powershell'.");
+      throw new CliError(`Só existe '${BRAND.command} sound shell powershell'.`);
     return say(installPowerShell({ dryRun }).summary);
   }
   const event = takeOption(rest, "--event") ?? "success";
@@ -222,10 +257,12 @@ function dispatch(argv) {
   };
   if (command === "inspect") return inspect(ctx);
   if (command === "doctor") return doctorCommand(ctx);
+  if (command === "update") return updateCommand();
   if (command === "dev") {
     const { head, extra } = splitExtra(args);
     if (head.length)
-      throw new CliError("'dev' não aceita nomes de tarefa.", "Para outra tarefa usa: djassi run <tarefa>");
+      throw new CliError("'dev' não aceita nomes de tarefa.", `Para outra tarefa usa: ${BRAND.command} run <tarefa>`);
+    if (flags.all) return runAll(ctx.cwd, "dev", extra, { dryRun: Boolean(flags["dry-run"]) });
     return runTask(ctx, "dev", extra);
   }
   if (command === "run") {
@@ -238,9 +275,17 @@ function dispatch(argv) {
   throw new CliError(`Não conheço o comando '${command}'.`, "Vê os comandos com: djassi --help");
 }
 
-export function main(argv) {
+export async function main(argv) {
   try {
-    return dispatch(argv);
+    const { flags, rest } = parseArgv(argv);
+    const [command] = rest;
+    const interactive = process.stdout.isTTY && command && !["update", "help"].includes(command);
+    if (interactive && !flags.version && !flags.help) {
+      const latest = await latestVersion();
+      if (latest && isNewer(latest, pkg.version))
+        console.error(`↑ Versão nova ${latest} (tens ${pkg.version}). Atualiza com: ${BRAND.command} update`);
+    }
+    return await dispatch(argv);
   } catch (error) {
     if (error instanceof CliError) {
       console.error(`✖ ${error.message}`);
