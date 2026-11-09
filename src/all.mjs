@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { readdirSync } from "node:fs";
 import { basename, join } from "node:path";
+import { loadTasks } from "./config.mjs";
 import { CliError } from "./errors.mjs";
 import { findProject } from "./detect.mjs";
 import { checkArgs, commandText, usesShell } from "./exec.mjs";
@@ -64,9 +65,20 @@ export async function runAll(root, action, extra, { dryRun = false, color = Bool
   const { projects, skipped } = projectsIn(root);
   const jobs = [];
   for (const project of projects) {
-    const plan = planTask(project, action, { extra });
+    const name = basename(project.root);
+    let custom;
+    try {
+      custom = loadTasks(project.root)[action];
+    } catch (error) {
+      skipped.push({ name, reason: error.message });
+      continue;
+    }
+    // Igual a djassi dev numa pasta: a tarefa do djassi.json ganha à detetada.
+    const plan = custom
+      ? { tool: custom[0], args: [...custom.slice(1), ...extra] }
+      : planTask(project, action, { extra });
     if (plan) jobs.push({ project, plan });
-    else skipped.push({ name: basename(project.root), reason: `sem tarefa '${action}'` });
+    else skipped.push({ name, reason: `sem tarefa '${action}'` });
   }
   for (const { name, reason } of skipped) console.log(`⊘ ${name}: ${reason} (fica de fora)`);
   if (!jobs.length)

@@ -29,15 +29,23 @@ export async function latestVersion({ force = false } = {}) {
   } catch {
     // sem cache: consulta a rede
   }
+  let version = null;
   try {
     const url = `https://raw.githubusercontent.com/${BRAND.repo}/main/package.json`;
     const res = await fetch(url, { signal: AbortSignal.timeout(2500) });
-    if (!res.ok) return null;
-    const { version } = await res.json();
+    const data = res.ok ? await res.json() : {};
+    // Só aceita x.y.z: o texto vem da rede e vai parar ao terminal.
+    if (typeof data.version === "string" && /^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$/.test(data.version))
+      version = data.version;
+  } catch {
+    // sem rede
+  }
+  // Guarda também as falhas: sem rede, não volta a esperar em cada comando durante 24h.
+  try {
     mkdirSync(configDir(), { recursive: true });
     writeFileSync(cacheFile(), JSON.stringify({ checkedAt: Date.now(), version }));
-    return version;
   } catch {
-    return null;
+    // sem pasta de configuração: a verificação repete-se, mas nada falha
   }
+  return version;
 }

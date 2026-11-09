@@ -281,7 +281,11 @@ function dispatch(argv) {
     const { head, extra } = splitExtra(args);
     if (head.length)
       throw new CliError("'dev' não aceita nomes de tarefa.", `Para outra tarefa usa: ${BRAND.command} run <tarefa>`);
-    if (flags.all) return runAll(ctx.cwd, "dev", extra, { dryRun: Boolean(flags["dry-run"]) });
+    if (flags.all) {
+      const root = flags.project ? resolve(flags.project) : ctx.cwd;
+      if (!existsSync(root)) throw new CliError(`A pasta '${root}' não existe.`);
+      return runAll(root, "dev", extra, { dryRun: Boolean(flags["dry-run"]) });
+    }
     return runTask(ctx, "dev", extra);
   }
   if (command === "run") {

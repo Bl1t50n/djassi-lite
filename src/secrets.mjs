@@ -30,19 +30,27 @@ export function checkStageFiles(paths) {
     );
 }
 
-export function stagedNames(cwd) {
-  const result = spawnSync("git", ["diff", "--cached", "--name-only"], { cwd, encoding: "utf8" });
-  return result.stdout ? result.stdout.split(/\r?\n/).filter(Boolean) : [];
+// Corre git e falha fechado: se não der para ler o diff, o commit não avança sem verificação.
+function gitOutput(cwd, args) {
+  const result = spawnSync("git", args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  if (result.error || result.status !== 0)
+    throw new CliError(
+      "Não consegui verificar o que vai no commit.",
+      (result.stderr ?? "").trim().split(/\r?\n/)[0] || "Confirma que estás num repositório git."
+    );
+  return result.stdout;
 }
 
-// Só olha para as linhas que o commit acrescenta.
+// -z: nomes sem aspas nem escapes (ex.: pastas com acentos).
+export function stagedNames(cwd) {
+  return gitOutput(cwd, ["diff", "--cached", "--name-only", "-z"]).split("\0").filter(Boolean);
+}
+
+// Só olha para as linhas que o commit acrescenta. --no-color e --no-ext-diff: a configuração
+// do utilizador não pode mudar o formato que estamos a ler.
 export function checkStagedContent(cwd) {
-  const result = spawnSync("git", ["diff", "--cached", "-U0"], {
-    cwd,
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024
-  });
-  const added = (result.stdout ?? "").split(/\r?\n/).filter((line) => line.startsWith("+") && !line.startsWith("+++"));
+  const diff = gitOutput(cwd, ["diff", "--cached", "-U0", "--no-color", "--no-ext-diff"]);
+  const added = diff.split(/\r?\n/).filter((line) => line.startsWith("+") && !line.startsWith("+++"));
   const hits = SECRET_TEXT.filter(([re]) => added.some((line) => re.test(line))).map(([, label]) => label);
   if (hits.length)
     throw new CliError(

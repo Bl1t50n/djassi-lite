@@ -11,8 +11,9 @@ const PROTECTED_PIDS = new Set([0, 4]);
 //   admin     → o Windows nega o acesso a esta sessão; precisa de terminal como administrador
 //   protected → nem como administrador se consegue abrir (processo protegido do Windows)
 //   unknown   → acesso permitido mas sem caminho (raro)
-export function kindOf({ path, granted, admin }) {
-  if (path) return /^C:\\Windows\\/i.test(path) ? "system" : "app";
+export function kindOf({ path, granted, admin }, systemRoot = process.env.SystemRoot || "C:\\Windows") {
+  // SystemRoot: o Windows pode estar noutra letra (ex.: D:\Windows).
+  if (path) return path.toLowerCase().startsWith(`${systemRoot.toLowerCase()}\\`) ? "system" : "app";
   if (granted) return "unknown";
   return admin ? "protected" : "admin";
 }

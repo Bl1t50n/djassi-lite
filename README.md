@@ -44,7 +44,8 @@ Se a pasta tiver vários projetos, o `djassi` pede `--project <pasta>` em vez de
 ## Limitações conhecidas
 
 - Não há `run` para Java/Maven (usa o IDE ou `mvn` diretamente).
-- Só reconhece o projeto na pasta indicada, não em subpastas (use `--project`).
+- `dev`, `run` e `inspect` só reconhecem o projeto na pasta indicada (usa `--project`). `dev --all` olha também para as pastas diretas.
+- `ports`, `ram` e `kill` só existem no Windows.
 - .NET, Go, Rust e Makefile: testado apenas na parte de deteção e comandos; não há cobertura de execução real nestes stacks.
 
 ## Sons
@@ -109,6 +110,24 @@ djassi dev --all --dry-run
 ```
 
 Se o `djassi` não encontrar um projeto, confirma o formato com `djassi inspect --project backend`.
+
+## Sistema (Windows)
+
+| Comando | Para quê |
+|---|---|
+| `djassi ports` | Portas em escuta e o processo dono de cada uma |
+| `djassi ram` | Os 15 processos que mais memória usam, e o total por tipo |
+| `djassi kill 1234` | Para o processo com esse PID (pede confirmação; `--yes` salta) |
+| `djassi kill --port 3000` | Para o processo que está nessa porta |
+
+Tipos de processo:
+
+- `system`: está na pasta do Windows. O `kill` recusa-o.
+- `app`: outro programa.
+- `admin`: o Windows nega o acesso a este terminal. Abre o terminal como administrador.
+- `protected`: nem como administrador se abre (ex.: antivírus). O `kill` recusa-o.
+
+Sem `--force`, o `kill` pede ao programa para fechar. Com `--force`, termina-o à força.
 
 ## Atualizações
 
