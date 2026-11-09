@@ -1,0 +1,32 @@
+{
+  "name": "djassi-lite",
+  "version": "0.1.0",
+  "description": "Mini CLI para estudantes: detetar projetos, correr tarefas, comandos Git com proteções e sons.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "djassi": "bin/djassi.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Bl1t50n/djassi-lite.git"
+  },
+  "keywords": [
+    "cli",
+    "education",
+    "git",
+    "developer-tools"
+  ]
+}
